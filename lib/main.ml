@@ -35,9 +35,17 @@ module Exercises = struct
     |> place_piece ~piece:Piece.O ~position:{ Position.row = 2; column = 0 }
   ;;
 
-  let print_game (game : Game.t) =
-    ignore game;
-    print_endline ""
+  let print_game (game : Game.t) = (* for tic tac toe only - match statement to game_kind to adjust list lengths *)
+    let board = game.board in
+    let game_array = List.init 3 ~f:(
+      fun row -> List.init 3 ~f:(
+        fun col -> 
+          match Map.find board {Game.Position.row = row; column = col} with 
+          | Some piece -> Game.Piece.to_string (piece)
+          | None -> " "
+      )) in
+    print_string(String.concat ~sep:"\n---------\n" (List.map game_array ~f:(fun row -> String.concat ~sep:" | " row ));
+    )
   ;;
 
   let%expect_test "print_win_for_x" =
@@ -160,20 +168,35 @@ module Exercises = struct
   ;;
 end
 
+let handle (_client : unit) (query : Rpcs.Take_turn.Query.t) =
+  ignore query;
+  let response = {Rpcs.Take_turn.Response.piece = Game.Piece.X ; Rpcs.Take_turn.Response.position = Game.Position.{row = 1; column = 0}} in
+  return response
+;;
+
+let implementations =
+  Rpc.Implementations.create_exn
+    ~on_unknown_rpc:`Close_connection
+    ~implementations:[ Rpc.Rpc.implement Rpcs.Take_turn.rpc handle]
+;;
+
 let command_play =
   Command.async
     ~summary:"Play"
     (let%map_open.Command () = return ()
-     and controller =
-       flag "-controller" (required host_and_port) ~doc:"_ host_and_port of controller"
      and port = flag "-port" (required int) ~doc:"_ port to listen on" in
      fun () ->
-       (* We should start listing on the supplied [port], ready to handle incoming
-          queries for [Take_turn] and [Game_over]. We should also connect to the
-          controller and send a [Start_game] to initiate the game. *)
-       ignore controller;
-       ignore port;
-       return ())
+      let%bind server =
+           Rpc.Connection.serve
+             ~implementations
+             ~initial_connection_state:(fun _client_identity _client_addr ->
+               (* This constructs the "client" values which are passed to the
+                  implementation function above. We're just using unit for now. *)
+               ())
+             ~where_to_listen:(Tcp.Where_to_listen.of_port port)
+             ()
+         in
+         Tcp.Server.close_finished server)
 ;;
 
 let command =
