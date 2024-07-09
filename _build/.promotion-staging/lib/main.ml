@@ -196,19 +196,33 @@ module Exercises = struct
   ;;
 
   let%expect_test "winning_moves" =
-    print_s [%sexp ((winning_moves ~me:Game.Piece.X test_game) : Game.Position.t list)];
+    print_s [%sexp ((winning_moves ~me:Game.Piece.O test_game) : Game.Position.t list)];
     [%expect
       {|
-      ()
+      (((row 0) (column 1)) ((row 1) (column 0)))
       |}];
     return ()
   ;;
 
   (* Exercise 4 *)
   let losing_moves ~(me : Game.Piece.t) (game : Game.t) : Game.Position.t list =
-    ignore me;
-    ignore game;
-    failwith "Implement me!"
+    let opp = Game.Piece.flip me in
+    available_moves game
+    |> List.filter ~f:(fun pos ->
+      let (test_board : Game.t) = place_piece game ~piece:opp ~position:pos in
+      match evaluate test_board with
+      | Game.Evaluation.Game_over {winner = Some piece} -> Game.Piece.equal piece opp
+      | _ -> false
+    )
+  ;;
+
+  let%expect_test "losing_moves" =
+    print_s [%sexp ((winning_moves ~me:Game.Piece.X test_game) : Game.Position.t list)];
+    [%expect
+      {|
+      ()
+      |}];
+    return ()
   ;;
 
   let exercise_one =
