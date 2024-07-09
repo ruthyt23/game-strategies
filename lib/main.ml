@@ -35,6 +35,15 @@ module Exercises = struct
     |> place_piece ~piece:Piece.O ~position:{ Position.row = 2; column = 0 }
   ;;
 
+  let test_game = 
+    let open Game in
+    empty_game
+    |> place_piece ~piece:Piece.O ~position:{ Position.row = 0; column = 0 }
+    |> place_piece ~piece:Piece.O ~position:{ Position.row = 0; column = 2 }
+    |> place_piece ~piece:Piece.O ~position:{ Position.row = 2; column = 0 }
+    |> place_piece ~piece:Piece.X ~position:{ Position.row = 1; column = 1 }
+    |> place_piece ~piece:Piece.X ~position:{ Position.row = 2; column = 2 }
+
   let position_game_array = 
     List.init 3 ~f:(
       fun row -> List.init 3 ~f:(
@@ -126,7 +135,7 @@ module Exercises = struct
     | None -> false )
 
   let possible_win_paths (game : Game.t) ~row ~column : Game.Position.t list list = 
-    let n = Game.Game_kind.board_length game.game_kind in
+    let n = Game.Game_kind.win_length game.game_kind in
     let vertical = List.init n ~f:(fun index1 -> 
       List.init n ~f:(fun index2 ->
         {Game.Position.row = row + index1 - index2; column}
@@ -177,9 +186,22 @@ module Exercises = struct
 
   (* Exercise 3 *)
   let winning_moves ~(me : Game.Piece.t) (game : Game.t) : Game.Position.t list =
-    ignore me;
-    ignore game;
-    failwith "Implement me!"
+    available_moves game
+    |> List.filter ~f:(fun pos ->
+      let (test_board : Game.t) = place_piece game ~piece:me ~position:pos in
+      match evaluate test_board with
+      | Game.Evaluation.Game_over {winner = Some piece} -> Game.Piece.equal piece me
+      | _ -> false
+    )
+  ;;
+
+  let%expect_test "winning_moves" =
+    print_s [%sexp ((winning_moves ~me:Game.Piece.O test_game) : Game.Position.t list)];
+    [%expect
+      {|
+      (((row 0) (column 1)) ((row 1) (column 0)))
+      |}];
+    return ()
   ;;
 
   (* Exercise 4 *)
