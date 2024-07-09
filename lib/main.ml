@@ -42,6 +42,17 @@ module Exercises = struct
           {Game.Position.row = row; column = col}
       ))
 
+  let _game_array (game : Game.t) = 
+    let board = game.board in
+    List.init 3 ~f:(
+      fun row -> List.init 3 ~f:(
+        fun col -> 
+          match Map.find board {Game.Position.row = row; column = col} with 
+          | Some piece -> Some piece
+          | None -> None
+      ))
+    ;;
+
   let string_game_array (game : Game.t) = 
     let board = game.board in
     List.init 3 ~f:(
@@ -104,10 +115,64 @@ module Exercises = struct
     return ()
   ;;
 
+  let in_bounds ~board_length ~row ~column =
+    let open Int.O in
+    List.for_all [ row; column ] ~f:(fun x -> x >= 0 && x < board_length)
+
+  let exists (game : Game.t) ~board_length ~row ~column = 
+    in_bounds ~board_length ~row ~column && (
+    match Map.find game.board {Game.Position.row = row; column} with 
+    | Some _ -> true
+    | None -> false )
+
+  let possible_win_paths (game : Game.t) ~row ~column : Game.Position.t list list = 
+    let n = Game.Game_kind.board_length game.game_kind in
+    let vertical = List.init n ~f:(fun index1 -> 
+      List.init n ~f:(fun index2 ->
+        {Game.Position.row = row + index1 - index2; column}
+      )
+      |> List.filter ~f:(fun {row ; column} -> exists game ~board_length:n ~row ~column)) in 
+    let horizontal = List.init n ~f:(fun index1 -> 
+      List.init n ~f:(fun index2 ->
+        {Game.Position.row; column = column + index1 - index2}
+      )
+      |> List.filter ~f:(fun {row ; column} -> exists game ~board_length:n ~row ~column)) in 
+    let diagonal_left = List.init n ~f:(fun index1 -> 
+      List.init n ~f:(fun index2 ->
+        {Game.Position.row = row + index1 - index2; column = column + index1 - index2}
+      )
+      |> List.filter ~f:(fun {row ; column} -> exists game ~board_length:n ~row ~column)) in 
+    let diagonal_right = List.init n ~f:(fun index1 -> 
+      List.init n ~f:(fun index2 ->
+        {Game.Position.row = row - index2 + index2; column = column + index2 - index1}
+      )
+      |> List.filter ~f:(fun {row ; column} -> exists game ~board_length:n ~row ~column)) in 
+    List.concat [vertical ; horizontal ; diagonal_left ; diagonal_right] |> List.filter ~f:(fun list -> List.length list = n)
+    
+
+  let win_check (game : Game.t) : Game.Piece.t option = 
+    let (winner : Game.Piece.t option ref) = ref None in
+    List.iter (Map.keys game.board) ~f:(fun {row ; column} -> 
+    possible_win_paths game ~row ~column |>
+    List.iter ~f:(fun row ->
+      if List.for_all row ~f:(fun pos -> Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.X)
+        then winner.contents <- Some Game.Piece.X
+      else if List.for_all row ~f:(fun pos -> Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.O)
+        then winner.contents <- Some Game.Piece.O
+    ));
+    !winner
+  ;;
+
   (* Exercise 2 *)
   let evaluate (game : Game.t) : Game.Evaluation.t =
-    ignore game;
-    failwith "Implement me!"
+    if not (List.is_empty (List.filter (Map.keys game.board) ~f:(fun pos -> not (Game.Position.in_bounds pos ~game_kind:game.game_kind))))
+      then Game.Evaluation.Illegal_move
+    else match win_check game with
+      | Some piece -> (Game.Evaluation.Game_over {winner = Some piece})
+      | None -> (
+        if List.is_empty (available_moves game)
+          then Game.Evaluation.Game_over {winner = None}
+        else Game.Evaluation.Game_continues)
   ;;
 
   (* Exercise 3 *)
@@ -143,7 +208,7 @@ module Exercises = struct
        fun () ->
          let evaluation = evaluate win_for_x in
          print_s [%sexp (evaluation : Game.Evaluation.t)];
-         let evaluation = evaluate win_for_x in
+         let evaluation = evaluate non_win in
          print_s [%sexp (evaluation : Game.Evaluation.t)];
          return ())
   ;;
