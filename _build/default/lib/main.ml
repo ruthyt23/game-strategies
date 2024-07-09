@@ -207,11 +207,32 @@ module Exercises = struct
   (* Exercise 4 *)
   let losing_moves ~(me : Game.Piece.t) (game : Game.t) : Game.Position.t list =
     let opp = Game.Piece.flip me in
-    winning_moves ~me:opp game
+    let opps_winning_moves = winning_moves ~me:opp game in
+    if List.is_empty opps_winning_moves then []
+      else
+    available_moves game |> List.filter ~f:(fun pos -> 
+       not (List.mem opps_winning_moves pos ~equal:Game.Position.equal))
   ;;
 
   let%expect_test "losing_moves" =
     print_s [%sexp ((losing_moves ~me:Game.Piece.X test_game) : Game.Position.t list)];
+    [%expect
+      {|
+      (((row 1) (column 2)) ((row 2) (column 1)))
+      |}];
+    return ()
+  ;;
+
+  (* Exercise 5: One move ahead *)
+
+  let available_moves_that_do_not_immediately_lose (game : Game.t) ~(me : Game.Piece.t) : Game.Position.t list =
+    available_moves game
+    |> List.filter ~f:(fun pos ->
+      not (List.mem (losing_moves game ~me) pos ~equal:Game.Position.equal || List.mem (winning_moves game ~me) pos ~equal:Game.Position.equal))
+  ;;
+
+  let%expect_test "available_moves_that_do_not_immediately_lose" =
+    print_s [%sexp ((available_moves_that_do_not_immediately_lose ~me:Game.Piece.X test_game) : Game.Position.t list)];
     [%expect
       {|
       (((row 0) (column 1)) ((row 1) (column 0)))
@@ -276,6 +297,17 @@ module Exercises = struct
          return ())
   ;;
 
+  let exercise_five =
+    Command.async
+      ~summary:"Exercise 5: One move ahead"
+      (let%map_open.Command () = return ()
+       and piece = piece_flag in
+       fun () ->
+         let available_moves_no_immediate_loss = available_moves_that_do_not_immediately_lose ~me:piece non_win in
+         print_s [%sexp (available_moves_no_immediate_loss : Game.Position.t list)];
+         return ())
+  ;;
+
   let command =
     Command.group
       ~summary:"Exercises"
@@ -283,6 +315,7 @@ module Exercises = struct
       ; "two"  , exercise_two
       ; "three", exercise_three
       ; "four" , exercise_four
+      ; "five" , exercise_five
       ]
   ;;
 end
