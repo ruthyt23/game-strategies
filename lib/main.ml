@@ -35,15 +35,26 @@ module Exercises = struct
     |> place_piece ~piece:Piece.O ~position:{ Position.row = 2; column = 0 }
   ;;
 
-  let print_game (game : Game.t) = (* for tic tac toe only - match statement to game_kind to adjust list lengths *)
+  let position_game_array = 
+    List.init 3 ~f:(
+      fun row -> List.init 3 ~f:(
+        fun col -> 
+          {Game.Position.row = row; column = col}
+      ))
+
+  let string_game_array (game : Game.t) = 
     let board = game.board in
-    let game_array = List.init 3 ~f:(
+    List.init 3 ~f:(
       fun row -> List.init 3 ~f:(
         fun col -> 
           match Map.find board {Game.Position.row = row; column = col} with 
           | Some piece -> Game.Piece.to_string (piece)
           | None -> " "
-      )) in
+      ))
+    ;;
+
+  let print_game (game : Game.t) = (* for tic tac toe only - match statement to game_kind to adjust list lengths *)
+    let game_array = string_game_array game in
     print_string(String.concat ~sep:"\n---------\n" (List.map game_array ~f:(fun row -> String.concat ~sep:" | " row ));
     )
   ;;
@@ -75,9 +86,11 @@ module Exercises = struct
   ;;
 
   (* Exercise 1 *)
-  let available_moves (game : Game.t) : Game.Position.t list =
-    ignore game;
-    failwith "Implement me!"
+  let available_moves (game : Game.t) : Game.Position.t list = (*use map.keys to filter maybe? *)
+    position_game_array |> List.concat |> List.filter ~f:(
+    fun pos -> match Map.find game.board pos with 
+    | Some _ -> false
+    | None -> true)
   ;;
 
   (* Exercise 2 *)
