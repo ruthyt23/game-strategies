@@ -44,6 +44,15 @@ module Exercises = struct
     |> place_piece ~piece:Piece.X ~position:{ Position.row = 1; column = 1 }
     |> place_piece ~piece:Piece.X ~position:{ Position.row = 2; column = 2 }
 
+  let test_minimax_game = 
+    let open Game in
+    empty_game
+    |> place_piece ~piece:Piece.O ~position:{ Position.row = 0; column = 0 }
+    |> place_piece ~piece:Piece.X ~position:{ Position.row = 1; column = 0 }
+    |> place_piece ~piece:Piece.X ~position:{ Position.row = 1; column = 1 }
+    |> place_piece ~piece:Piece.O ~position:{ Position.row = 1; column = 2 }
+
+
   let position_game_array = 
     List.init 3 ~f:(
       fun row -> List.init 3 ~f:(
@@ -134,7 +143,7 @@ module Exercises = struct
     | Some _ -> true
     | None -> false )
 
-  let possible_win_paths (game : Game.t) ~row ~column : Game.Position.t list list = 
+  let potential_win_paths (game : Game.t) ~row ~column : Game.Position.t list list = 
     let n = Game.Game_kind.win_length game.game_kind in
     let vertical = List.init n ~f:(fun index1 -> 
       List.init n ~f:(fun index2 ->
@@ -156,13 +165,13 @@ module Exercises = struct
         {Game.Position.row = row - index2 + index2; column = column + index2 - index1}
       )
       |> List.filter ~f:(fun {row ; column} -> exists game ~board_length:n ~row ~column)) in 
-    List.concat [vertical ; horizontal ; diagonal_left ; diagonal_right] |> List.filter ~f:(fun list -> List.length list = n)
+    List.concat [vertical ; horizontal ; diagonal_left ; diagonal_right] |> List.filter ~f:(fun list -> List.length list > 1)
     
-
   let win_check (game : Game.t) : Game.Piece.t option = 
     let (winner : Game.Piece.t option ref) = ref None in
+    let n = Game.Game_kind.win_length game.game_kind in
     List.iter (Map.keys game.board) ~f:(fun {row ; column} -> 
-    possible_win_paths game ~row ~column |>
+    potential_win_paths game ~row ~column |> List.filter ~f:(fun list -> List.length list = n) |>
     List.iter ~f:(fun row ->
       if List.for_all row ~f:(fun pos -> Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.X)
         then winner.contents <- Some Game.Piece.X
@@ -240,6 +249,63 @@ module Exercises = struct
     return ()
   ;;
 
+  (* Exercise 6: Minimax *)
+
+  let score (game : Game.t) ~(me : Game.Piece.t) = 
+    let x_score = ref 0 in
+    let o_score = ref 0 in
+    List.iter (Map.keys game.board) ~f:(fun {row ; column} -> 
+    potential_win_paths game ~row ~column |> 
+    List.iter ~f:(fun row ->
+      if List.for_all row ~f:(fun pos -> Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.X)
+        then x_score.contents <- (List.length row)
+      else if List.for_all row ~f:(fun pos -> Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.O)
+        then o_score.contents <- (List.length row)
+    ));
+    match me with
+    | Game.Piece.X -> !x_score - (!o_score * 5)
+    | Game.Piece.O -> !o_score - (!x_score * 5)
+  ;;
+
+  let rec minimax (game : Game.t) ~(me : Game.Piece.t) ~(maximizingPlayer : bool) ~(depth : int) = 
+    match evaluate game with
+    | Game.Evaluation.Game_over {winner = Some piece} ->
+      if Game.Piece.equal piece me then 500 else (- 500)
+    | Game.Evaluation.Game_over {winner = None} -> 0
+    | _ -> (
+      if depth = 0 then score game ~me
+      else if maximizingPlayer
+        then (let value = ref (score game ~me) in 
+        List.iter (available_moves game) ~f:(fun pos -> 
+          let new_board = place_piece game ~piece:me ~position:pos in 
+          value.contents <- (max !value (minimax new_board ~me ~maximizingPlayer:false ~depth:(depth - 1)))
+        );
+        !value)
+      else (
+        let value = ref (score game ~me) in
+        List.iter (available_moves game) ~f:(fun pos -> 
+          let new_board = place_piece game ~piece:me ~position:pos in 
+          value.contents <- (min !value (minimax new_board ~me ~maximizingPlayer:true ~depth:(depth - 1)))
+        );
+        !value
+        )
+    )
+  ;;
+
+  let test_minimax (game : Game.t) ~(me : Game.Piece.t) = 
+    let max_pos = ref Game.Position.{row = 0; column = 0} in
+    let max_val = ref Int.min_value in
+    let win_moves = winning_moves game ~me in
+    if not (List.is_empty win_moves) 
+      then (List.hd_exn win_moves)
+    else (List.iter (available_moves game) ~f:(fun pos -> 
+      let new_board = place_piece game ~piece:me ~position:pos in 
+      let value = minimax new_board ~me ~maximizingPlayer:true ~depth:3 in
+      if value > !max_val then max_pos.contents <- pos; max_val.contents <- value;
+      );
+    !max_pos)
+  ;;
+
   let exercise_one =
     Command.async
       ~summary:"Exercise 1: Where can I move?"
@@ -308,6 +374,17 @@ module Exercises = struct
          return ())
   ;;
 
+  let exercise_six =
+    Command.async
+      ~summary:"Exercise 6: Minimax"
+      (let%map_open.Command () = return ()
+       and piece = piece_flag in
+       fun () ->
+         let minimax_move = test_minimax ~me:piece test_minimax_game in
+         print_s [%sexp (minimax_move : Game.Position.t)];
+         return ())
+  ;;
+
   let command =
     Command.group
       ~summary:"Exercises"
@@ -316,6 +393,7 @@ module Exercises = struct
       ; "three", exercise_three
       ; "four" , exercise_four
       ; "five" , exercise_five
+      ; "six" , exercise_six
       ]
   ;;
 end
