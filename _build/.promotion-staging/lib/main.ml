@@ -35,12 +35,26 @@ module Exercises = struct
     |> place_piece ~piece:Piece.O ~position:{ Position.row = 2; column = 0 }
   ;;
 
-  let print_game (game : Game.t) = (* for tic tac toe only - match statement to game_kind to adjust list lengths *)
-    let board = game.board in
-    let game_array = List.init 3 ~f:(
+  let position_game_array = 
+    List.init 3 ~f:(
       fun row -> List.init 3 ~f:(
-        fun col -> Game.Piece.to_string (Map.find_exn board {Game.Position.row = row; column = col})
-      )) in
+        fun col -> 
+          {Game.Position.row = row; column = col}
+      ))
+
+  let string_game_array (game : Game.t) = 
+    let board = game.board in
+    List.init 3 ~f:(
+      fun row -> List.init 3 ~f:(
+        fun col -> 
+          match Map.find board {Game.Position.row = row; column = col} with 
+          | Some piece -> Game.Piece.to_string (piece)
+          | None -> " "
+      ))
+    ;;
+
+  let print_game (game : Game.t) = (* for tic tac toe only - match statement to game_kind to adjust list lengths *)
+    let game_array = string_game_array game in
     print_string(String.concat ~sep:"\n---------\n" (List.map game_array ~f:(fun row -> String.concat ~sep:" | " row ));
     )
   ;;
@@ -60,34 +74,34 @@ module Exercises = struct
 
   let%expect_test "print_non_win" =
     print_game non_win;
-    [%expect.unreachable];
+    [%expect
+      {|
+      X |   |
+      ---------
+      O |   |
+      ---------
+      O |   | X
+      |}];
     return ()
-  [@@expect.uncaught_exn {|
-    (* CR expect_test_collector: This test expectation appears to contain a backtrace.
-       This is strongly discouraged as backtraces are fragile.
-       Please change this test to not include a backtrace. *)
-
-    (monitor.ml.Error
-      (Not_found_s ("Map.find_exn: not found" ((row 2) (column 1))))
-      ("Raised at Base__Map.Tree0.find_exn.if_not_found in file \"src/map.ml\", line 579, characters 6-84"
-        "Called from Base__Map.Accessors.find_exn in file \"src/map.ml\" (inlined), line 2102, characters 4-118"
-        "Called from Game_strategies_lib__Main.Exercises.print_game.(fun) in file \"lib/main.ml\", line 42, characters 40-100"
-        "Called from Base__List.init.loop in file \"src/list.ml\", line 952, characters 43-52"
-        "Called from Base__List.init.loop in file \"src/list.ml\", line 952, characters 43-52"
-        "Called from Game_strategies_lib__Main.Exercises.print_game in file \"lib/main.ml\", line 40, characters 21-181"
-        "Called from Game_strategies_lib__Main.Exercises.(fun) in file \"lib/main.ml\", line 62, characters 4-22"
-        "Called from Async_kernel__Monitor.Exported_for_scheduler.schedule'.upon_work_fill_i in file \"src/monitor.ml\", line 293, characters 42-51"
-        "Called from Async_kernel__Job_queue.run_jobs in file \"src/job_queue.ml\", line 180, characters 6-47"
-        "Caught by monitor block_on_async"))
-    Raised at Base__Result.ok_exn in file "src/result.ml" (inlined), line 251, characters 17-26
-    Called from Async_unix__Thread_safe.block_on_async_exn in file "src/thread_safe.ml", line 168, characters 29-63
-    Called from Expect_test_collector.Make.Instance_io.exec in file "collector/expect_test_collector.ml", line 234, characters 12-19 |}]
   ;;
 
   (* Exercise 1 *)
-  let available_moves (game : Game.t) : Game.Position.t list =
-    ignore game;
-    failwith "Implement me!"
+  let available_moves (game : Game.t) : Game.Position.t list = (*use map.keys to filter maybe? *)
+    position_game_array |> List.concat |> List.filter ~f:(
+    fun pos -> match Map.find game.board pos with 
+    | Some _ -> false
+    | None -> true)
+  ;;
+
+  let%expect_test "available_moves" =
+    print_s [%sexp ((available_moves empty_game) : Game.Position.t list)];
+    [%expect
+      {|
+      (((row 0) (column 0)) ((row 0) (column 1)) ((row 0) (column 2)) 
+       ((row 1) (column 0)) ((row 1) (column 1)) ((row 1) (column 2))
+       ((row 2) (column 0)) ((row 2) (column 1)) ((row 2) (column 2)))
+      |}];
+    return ()
   ;;
 
   (* Exercise 2 *)

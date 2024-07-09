@@ -35,7 +35,14 @@ module Exercises = struct
     |> place_piece ~piece:Piece.O ~position:{ Position.row = 2; column = 0 }
   ;;
 
-  let game_array (game : Game.t) = 
+  let position_game_array = 
+    List.init 3 ~f:(
+      fun row -> List.init 3 ~f:(
+        fun col -> 
+          {Game.Position.row = row; column = col}
+      ))
+
+  let string_game_array (game : Game.t) = 
     let board = game.board in
     List.init 3 ~f:(
       fun row -> List.init 3 ~f:(
@@ -47,7 +54,7 @@ module Exercises = struct
     ;;
 
   let print_game (game : Game.t) = (* for tic tac toe only - match statement to game_kind to adjust list lengths *)
-    let game_array = game_array game in
+    let game_array = string_game_array game in
     print_string(String.concat ~sep:"\n---------\n" (List.map game_array ~f:(fun row -> String.concat ~sep:" | " row ));
     )
   ;;
@@ -79,9 +86,22 @@ module Exercises = struct
   ;;
 
   (* Exercise 1 *)
-  let available_moves (game : Game.t) : Game.Position.t list =
-    ignore game;
-    failwith "Implement me!"
+  let available_moves (game : Game.t) : Game.Position.t list = (*use map.keys to filter maybe? *)
+    position_game_array |> List.concat |> List.filter ~f:(
+    fun pos -> match Map.find game.board pos with 
+    | Some _ -> false
+    | None -> true)
+  ;;
+
+  let%expect_test "available_moves" =
+    print_s [%sexp ((available_moves empty_game) : Game.Position.t list)];
+    [%expect
+      {|
+      (((row 0) (column 0)) ((row 0) (column 1)) ((row 0) (column 2)) 
+       ((row 1) (column 0)) ((row 1) (column 1)) ((row 1) (column 2)) 
+       ((row 2) (column 0)) ((row 2) (column 1)) ((row 2) (column 2)))
+      |}];
+    return ()
   ;;
 
   (* Exercise 2 *)

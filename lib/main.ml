@@ -93,6 +93,17 @@ module Exercises = struct
     | None -> true)
   ;;
 
+  let%expect_test "available_moves" =
+    print_s [%sexp ((available_moves empty_game) : Game.Position.t list)];
+    [%expect
+      {|
+      (((row 0) (column 0)) ((row 0) (column 1)) ((row 0) (column 2)) 
+       ((row 1) (column 0)) ((row 1) (column 1)) ((row 1) (column 2)) 
+       ((row 2) (column 0)) ((row 2) (column 1)) ((row 2) (column 2)))
+      |}];
+    return ()
+  ;;
+
   (* Exercise 2 *)
   let evaluate (game : Game.t) : Game.Evaluation.t =
     ignore game;
