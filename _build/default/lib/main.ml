@@ -207,13 +207,7 @@ module Exercises = struct
   (* Exercise 4 *)
   let losing_moves ~(me : Game.Piece.t) (game : Game.t) : Game.Position.t list =
     let opp = Game.Piece.flip me in
-    available_moves game
-    |> List.filter ~f:(fun pos ->
-      let (test_board : Game.t) = place_piece game ~piece:opp ~position:pos in
-      match evaluate test_board with
-      | Game.Evaluation.Game_over {winner = Some piece} -> Game.Piece.equal piece opp
-      | _ -> false
-    )
+    winning_moves ~me:opp game
   ;;
 
   let%expect_test "losing_moves" =
