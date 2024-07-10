@@ -154,25 +154,6 @@ module Exercises = struct
     return ()
   ;;
 
-  (* Exercise 1 *)
-  let available_moves (game : Game.t) : Game.Position.t list = (*use map.keys to filter maybe? *)
-    position_game_array game |> List.concat |> List.filter ~f:(
-    fun pos -> match Map.find game.board pos with 
-    | Some _ -> false
-    | None -> true)
-  ;;
-
-  let%expect_test "available_moves" =
-    print_s [%sexp ((available_moves empty_game) : Game.Position.t list)];
-    [%expect
-      {|
-      (((row 0) (column 0)) ((row 0) (column 1)) ((row 0) (column 2)) 
-       ((row 1) (column 0)) ((row 1) (column 1)) ((row 1) (column 2)) 
-       ((row 2) (column 0)) ((row 2) (column 1)) ((row 2) (column 2)))
-      |}];
-    return ()
-  ;;
-
   let in_bounds ~board_length ~row ~column =
     let open Int.O in
     List.for_all [ row; column ] ~f:(fun x -> x >= 0 && x < board_length)
@@ -182,6 +163,44 @@ module Exercises = struct
     match Map.find game.board {Game.Position.row = row; column} with 
     | Some _ -> true
     | None -> false )
+
+  (* Exercise 1 *)
+  let all_available_moves (game : Game.t) : Game.Position.t list = (*use map.keys to filter maybe? *)
+    position_game_array game |> List.concat |> List.filter ~f:(
+    fun pos -> match Map.find game.board pos with 
+    | Some _ -> false
+    | None -> true)
+  ;;
+
+  let%expect_test "available_moves" =
+    print_s [%sexp ((all_available_moves empty_game) : Game.Position.t list)];
+    [%expect
+      {|
+      (((row 0) (column 0)) ((row 0) (column 1)) ((row 0) (column 2)) 
+       ((row 1) (column 0)) ((row 1) (column 1)) ((row 1) (column 2)) 
+       ((row 2) (column 0)) ((row 2) (column 1)) ((row 2) (column 2)))
+      |}];
+    return ()
+  ;;
+
+  let close_available_moves (game : Game.t) = 
+    let board_length = Game.Game_kind.board_length game.game_kind in
+    all_available_moves game |>
+    List.filter ~f:(fun {row ; column} -> (
+      [row - 1, column - 1; row - 1, column; row - 1, column + 1; row, column - 1; row, column + 1; row + 1, column - 1; row + 1, column; row + 1, column + 1]
+      |> List.filter ~f:(fun (row, column) -> exists game ~board_length ~row ~column)
+      |> List.exists ~f:(fun (row, column) ->
+        match Map.find game.board {Game.Position.row = row; column} with 
+        | Some _ -> true
+        | None -> false 
+        )
+    ))
+  ;;
+
+  let available_moves (game : Game.t) = 
+    if Map.length (game.board) < (Game.Game_kind.win_length game.game_kind)
+      then all_available_moves game
+      else close_available_moves game
 
   let potential_win_paths (game : Game.t) ~row ~column : Game.Position.t list list = 
     let n = Game.Game_kind.win_length game.game_kind in
@@ -236,7 +255,7 @@ module Exercises = struct
 
   (* Exercise 3 *)
   let winning_moves ~(me : Game.Piece.t) (game : Game.t) : Game.Position.t list =
-    available_moves game
+    all_available_moves game
     |> List.filter ~f:(fun pos ->
       let (test_board : Game.t) = place_piece game ~piece:me ~position:pos in
       match evaluate test_board with
@@ -260,7 +279,7 @@ module Exercises = struct
     let opps_winning_moves = winning_moves ~me:opp game in
     if List.is_empty opps_winning_moves then []
       else
-    available_moves game |> List.filter ~f:(fun pos -> 
+    all_available_moves game |> List.filter ~f:(fun pos -> 
        not (List.mem opps_winning_moves pos ~equal:Game.Position.equal))
   ;;
 
@@ -292,7 +311,7 @@ module Exercises = struct
 
   (* Exercise 6: Minimax *)
 
-  let score (game : Game.t) ~(me : Game.Piece.t) = 
+  let score (game : Game.t) ~(me : Game.Piece.t) ~(depth : int) = 
     let x_score = ref 0 in
     let o_score = ref 0 in
     List.iter (Map.keys game.board) ~f:(fun {row ; column} -> 
@@ -304,32 +323,38 @@ module Exercises = struct
         then o_score.contents <- (List.length row)
     ));
     match me with
-    | Game.Piece.X -> !x_score - (!o_score * 5)
-    | Game.Piece.O -> !o_score - (!x_score * 5)
+    | Game.Piece.X -> !x_score - (!o_score * 5) + depth
+    | Game.Piece.O -> !o_score - (!x_score * 5) + depth
   ;;
 
-  let rec minimax_alg (game : Game.t) ~(me : Game.Piece.t) ~(maximizingPlayer : bool) ~(depth : int) = 
+  let rec minimax_alg (game : Game.t) ~(me : Game.Piece.t) ~(maximizingPlayer : bool) ~(depth : int) ?(max_val = Int.min_value) () = 
     match evaluate game with
     | Game.Evaluation.Game_over {winner = Some piece} ->
       if Game.Piece.equal piece me then 500 else (- 500)
     | Game.Evaluation.Game_over {winner = None} -> 0
     | _ -> (
-      if depth = 0 then score game ~me
-      else if maximizingPlayer
-        then (let value = ref (score game ~me) in 
-        List.iter (available_moves game) ~f:(fun pos -> 
-          let new_board = place_piece game ~piece:me ~position:pos in 
-          value.contents <- (max !value (minimax_alg new_board ~me ~maximizingPlayer:false ~depth:(depth - 1)))
-        );
-        !value)
+      if depth = 0 then score game ~me ~depth
       else (
-        let value = ref (score game ~me) in
-        List.iter (available_moves game) ~f:(fun pos -> 
-          let new_board = place_piece game ~piece:me ~position:pos in 
-          value.contents <- (min !value (minimax_alg new_board ~me ~maximizingPlayer:true ~depth:(depth - 1)))
-        );
-        !value
+        let value = ref (score game ~me ~depth) in
+        if !value < max_val
+          then Int.min_value
+        else (
+          if maximizingPlayer
+            then ( 
+            List.iter (available_moves game) ~f:(fun pos -> 
+              let new_board = place_piece game ~piece:me ~position:pos in 
+              value.contents <- (max !value (minimax_alg new_board ~me ~maximizingPlayer:false ~depth:(depth - 1) ~max_val () ))
+            );
+            !value)
+          else (
+            List.iter (available_moves game) ~f:(fun pos -> 
+              let new_board = place_piece game ~piece:me ~position:pos in 
+              value.contents <- (min !value (minimax_alg new_board ~me ~maximizingPlayer:true ~depth:(depth - 1) ~max_val ()))
+            );
+            !value
+            )
         )
+      )
     )
   ;;
 
@@ -342,10 +367,15 @@ module Exercises = struct
       then (List.hd_exn win_moves)
     else if not (List.is_empty lose_moves) 
       then (List.hd_exn lose_moves)
+    (*else if (Map.is_empty game.board)
+      then (let n = Game.Game_kind.board_length game.game_kind / 2 in Game.Position.{row = n; column = n})*)
     else (
       List.iter (available_moves game) ~f:(fun pos -> 
       let new_board = place_piece game ~piece:me ~position:pos in 
-      let value = minimax_alg new_board ~me ~maximizingPlayer:true ~depth:2 in
+      let value = match game.game_kind with 
+        | Game.Game_kind.Omok -> minimax_alg new_board ~me ~maximizingPlayer:true ~depth:2 ~max_val:!max_val  ()
+        | Game.Game_kind.Tic_tac_toe -> minimax_alg new_board ~me ~maximizingPlayer:true ~depth:3 ()
+      in
       if value > !max_val then max_pos.contents <- pos; max_val.contents <- value;
       );
     !max_pos)
@@ -447,8 +477,12 @@ module Exercises = struct
       ~summary:"Omok Test"
       (let%map_open.Command () = return () in
        fun () ->
+          let start = Time_ns_unix.now () in
          let omok_test = minimax serious_omok_test ~me:Game.Piece.X in
          print_s [%sexp (omok_test : Game.Position.t)];
+         let stop = Time_ns_unix.now () in
+         let time_elapsed = Time_ns_unix.diff stop start in
+        Core.printf !"Finished in %{Time_ns_unix.Span}\n%!" time_elapsed;
          return ())
   ;;
 
