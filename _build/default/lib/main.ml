@@ -6,6 +6,7 @@ module Exercises = struct
   (* Here are some functions which know how to create a couple different kinds
      of games *)
   let empty_game = Game.empty Game.Game_kind.Tic_tac_toe
+  let empty_omok = Game.empty Game.Game_kind.Omok
 
   let place_piece (game : Game.t) ~piece ~position : Game.t =
     let board = Map.set game.board ~key:position ~data:piece in
@@ -52,10 +53,48 @@ module Exercises = struct
     |> place_piece ~piece:Piece.X ~position:{ Position.row = 1; column = 1 }
     |> place_piece ~piece:Piece.O ~position:{ Position.row = 1; column = 2 }
 
+    let diag_left_debug = 
+      let open Game in
+      empty_game
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 0; column = 0 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 0; column = 2 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 1; column = 1 }
+    let diag_right_debug = 
+      let open Game in
+      empty_game
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 0; column = 0 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 0; column = 2 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 1; column = 1 }
 
-  let position_game_array = 
-    List.init 3 ~f:(
-      fun row -> List.init 3 ~f:(
+
+    let _omok_test = 
+      let open Game in
+      empty_omok
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 8; column = 3 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 7; column = 4 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 6; column = 5 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 5; column = 6 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 0; column = 0 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 1; column = 1 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 2; column = 2 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 3; column = 6 }
+
+    let serious_omok_test = 
+      let open Game in
+      empty_omok
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 3; column = 5 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 7; column = 4 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 2; column = 9 }
+      |> place_piece ~piece:Piece.X ~position:{ Position.row = 5; column = 6 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 0; column = 0 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 1; column = 8 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 3; column = 13 }
+      |> place_piece ~piece:Piece.O ~position:{ Position.row = 4; column = 7 }
+
+  let position_game_array (game : Game.t)= 
+    let length = Game.Game_kind.board_length game.game_kind in
+    List.init length ~f:(
+      fun row -> List.init length ~f:(
         fun col -> 
           {Game.Position.row = row; column = col}
       ))
@@ -73,8 +112,9 @@ module Exercises = struct
 
   let string_game_array (game : Game.t) = 
     let board = game.board in
-    List.init 3 ~f:(
-      fun row -> List.init 3 ~f:(
+    let length = Game.Game_kind.board_length game.game_kind in
+    List.init length ~f:(
+      fun row -> List.init length ~f:(
         fun col -> 
           match Map.find board {Game.Position.row = row; column = col} with 
           | Some piece -> Game.Piece.to_string (piece)
@@ -82,7 +122,7 @@ module Exercises = struct
       ))
     ;;
 
-  let print_game (game : Game.t) = (* for tic tac toe only - match statement to game_kind to adjust list lengths *)
+  let print_game (game : Game.t) = 
     let game_array = string_game_array game in
     print_string(String.concat ~sep:"\n---------\n" (List.map game_array ~f:(fun row -> String.concat ~sep:" | " row ));
     )
@@ -116,7 +156,7 @@ module Exercises = struct
 
   (* Exercise 1 *)
   let available_moves (game : Game.t) : Game.Position.t list = (*use map.keys to filter maybe? *)
-    position_game_array |> List.concat |> List.filter ~f:(
+    position_game_array game |> List.concat |> List.filter ~f:(
     fun pos -> match Map.find game.board pos with 
     | Some _ -> false
     | None -> true)
@@ -145,6 +185,7 @@ module Exercises = struct
 
   let potential_win_paths (game : Game.t) ~row ~column : Game.Position.t list list = 
     let n = Game.Game_kind.win_length game.game_kind in
+    let board_length = Game.Game_kind.board_length game.game_kind in
     let vertical = List.init n ~f:(fun index1 -> 
       List.init n ~f:(fun index2 ->
         {Game.Position.row = row + index1 - index2; column}
@@ -162,9 +203,9 @@ module Exercises = struct
       |> List.filter ~f:(fun {row ; column} -> exists game ~board_length:n ~row ~column)) in 
     let diagonal_right = List.init n ~f:(fun index1 -> 
       List.init n ~f:(fun index2 ->
-        {Game.Position.row = row - index2 + index2; column = column + index2 - index1}
+        {Game.Position.row = row + index2 - index1; column = column + index1 - index2}
       )
-      |> List.filter ~f:(fun {row ; column} -> exists game ~board_length:n ~row ~column)) in 
+      |> List.filter ~f:(fun {row ; column} -> exists game ~board_length ~row ~column)) in 
     List.concat [vertical ; horizontal ; diagonal_left ; diagonal_right] |> List.filter ~f:(fun list -> List.length list > 1)
     
   let win_check (game : Game.t) : Game.Piece.t option = 
@@ -296,11 +337,15 @@ module Exercises = struct
     let max_pos = ref Game.Position.{row = 0; column = 0} in
     let max_val = ref Int.min_value in
     let win_moves = winning_moves game ~me in
+    let lose_moves = winning_moves game ~me:(Game.Piece.flip me) in
     if not (List.is_empty win_moves) 
       then (List.hd_exn win_moves)
-    else (List.iter (available_moves game) ~f:(fun pos -> 
+    else if not (List.is_empty lose_moves) 
+      then (List.hd_exn lose_moves)
+    else (
+      List.iter (available_moves game) ~f:(fun pos -> 
       let new_board = place_piece game ~piece:me ~position:pos in 
-      let value = minimax_alg new_board ~me ~maximizingPlayer:true ~depth:5 in
+      let value = minimax_alg new_board ~me ~maximizingPlayer:true ~depth:2 in
       if value > !max_val then max_pos.contents <- pos; max_val.contents <- value;
       );
     !max_pos)
@@ -385,6 +430,28 @@ module Exercises = struct
          return ())
   ;;
 
+  let diagonal_debug =
+    Command.async
+      ~summary:"Diagonal Debug"
+      (let%map_open.Command () = return () in
+       fun () ->
+         let diag_left_debug = winning_moves diag_left_debug ~me:Game.Piece.X in
+         let diag_right_debug = winning_moves diag_right_debug ~me:Game.Piece.X in
+         print_s [%sexp (diag_left_debug : Game.Position.t list)];
+         print_s [%sexp (diag_right_debug : Game.Position.t list)];
+         return ())
+  ;;
+
+  let omok_test =
+    Command.async
+      ~summary:"Omok Test"
+      (let%map_open.Command () = return () in
+       fun () ->
+         let omok_test = minimax serious_omok_test ~me:Game.Piece.X in
+         print_s [%sexp (omok_test : Game.Position.t)];
+         return ())
+  ;;
+
   let command =
     Command.group
       ~summary:"Exercises"
@@ -394,6 +461,8 @@ module Exercises = struct
       ; "four" , exercise_four
       ; "five" , exercise_five
       ; "six" , exercise_six
+      ; "diag-debug", diagonal_debug
+      ; "omok-test", omok_test
       ]
   ;;
 end
