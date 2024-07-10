@@ -311,7 +311,7 @@ module Exercises = struct
 
   (* Exercise 6: Minimax *)
 
-  let score (game : Game.t) ~(me : Game.Piece.t) ~(depth : int) = 
+  let score (game : Game.t) ~(me : Game.Piece.t) = 
     let x_score = ref 0 in
     let o_score = ref 0 in
     List.iter (Map.keys game.board) ~f:(fun {row ; column} -> 
@@ -323,19 +323,19 @@ module Exercises = struct
         then o_score.contents <- (List.length row)
     ));
     match me with
-    | Game.Piece.X -> !x_score - (!o_score * 5) + depth
-    | Game.Piece.O -> !o_score - (!x_score * 5) + depth
+    | Game.Piece.X -> !x_score - (!o_score * 5)
+    | Game.Piece.O -> !o_score - (!x_score * 5)
   ;;
 
   let rec minimax_alg (game : Game.t) ~(me : Game.Piece.t) ~(maximizingPlayer : bool) ~(depth : int) ?(max_val = Int.min_value) () = 
     match evaluate game with
     | Game.Evaluation.Game_over {winner = Some piece} ->
-      if Game.Piece.equal piece me then 500 else (- 500)
+      if Game.Piece.equal piece me then 500 + depth else (- 500 - depth)
     | Game.Evaluation.Game_over {winner = None} -> 0
     | _ -> (
-      if depth = 0 then score game ~me ~depth
+      if depth = 0 then score game ~me
       else (
-        let value = ref (score game ~me ~depth) in
+        let value = ref (score game ~me) in
         if !value < max_val
           then Int.min_value
         else (
@@ -374,7 +374,7 @@ module Exercises = struct
       let new_board = place_piece game ~piece:me ~position:pos in 
       let value = match game.game_kind with 
         | Game.Game_kind.Omok -> minimax_alg new_board ~me ~maximizingPlayer:true ~depth:2 ~max_val:!max_val  ()
-        | Game.Game_kind.Tic_tac_toe -> minimax_alg new_board ~me ~maximizingPlayer:true ~depth:3 ()
+        | Game.Game_kind.Tic_tac_toe -> minimax_alg new_board ~me ~maximizingPlayer:true ~depth:5 ()
       in
       if value > !max_val then max_pos.contents <- pos; max_val.contents <- value;
       );
