@@ -267,7 +267,7 @@ module Exercises = struct
     | Game.Piece.O -> !o_score - (!x_score * 5)
   ;;
 
-  let rec minimax (game : Game.t) ~(me : Game.Piece.t) ~(maximizingPlayer : bool) ~(depth : int) = 
+  let rec minimax_alg (game : Game.t) ~(me : Game.Piece.t) ~(maximizingPlayer : bool) ~(depth : int) = 
     match evaluate game with
     | Game.Evaluation.Game_over {winner = Some piece} ->
       if Game.Piece.equal piece me then 500 else (- 500)
@@ -278,21 +278,21 @@ module Exercises = struct
         then (let value = ref (score game ~me) in 
         List.iter (available_moves game) ~f:(fun pos -> 
           let new_board = place_piece game ~piece:me ~position:pos in 
-          value.contents <- (max !value (minimax new_board ~me ~maximizingPlayer:false ~depth:(depth - 1)))
+          value.contents <- (max !value (minimax_alg new_board ~me ~maximizingPlayer:false ~depth:(depth - 1)))
         );
         !value)
       else (
         let value = ref (score game ~me) in
         List.iter (available_moves game) ~f:(fun pos -> 
           let new_board = place_piece game ~piece:me ~position:pos in 
-          value.contents <- (min !value (minimax new_board ~me ~maximizingPlayer:true ~depth:(depth - 1)))
+          value.contents <- (min !value (minimax_alg new_board ~me ~maximizingPlayer:true ~depth:(depth - 1)))
         );
         !value
         )
     )
   ;;
 
-  let test_minimax (game : Game.t) ~(me : Game.Piece.t) = 
+  let minimax (game : Game.t) ~(me : Game.Piece.t) = 
     let max_pos = ref Game.Position.{row = 0; column = 0} in
     let max_val = ref Int.min_value in
     let win_moves = winning_moves game ~me in
@@ -300,7 +300,7 @@ module Exercises = struct
       then (List.hd_exn win_moves)
     else (List.iter (available_moves game) ~f:(fun pos -> 
       let new_board = place_piece game ~piece:me ~position:pos in 
-      let value = minimax new_board ~me ~maximizingPlayer:true ~depth:3 in
+      let value = minimax_alg new_board ~me ~maximizingPlayer:true ~depth:5 in
       if value > !max_val then max_pos.contents <- pos; max_val.contents <- value;
       );
     !max_pos)
@@ -380,7 +380,7 @@ module Exercises = struct
       (let%map_open.Command () = return ()
        and piece = piece_flag in
        fun () ->
-         let minimax_move = test_minimax ~me:piece test_minimax_game in
+         let minimax_move = minimax ~me:piece test_minimax_game in
          print_s [%sexp (minimax_move : Game.Position.t)];
          return ())
   ;;
@@ -399,8 +399,8 @@ module Exercises = struct
 end
 
 let handle (_client : unit) (query : Rpcs.Take_turn.Query.t) =
-  ignore query;
-  let response = {Rpcs.Take_turn.Response.piece = Game.Piece.X ; Rpcs.Take_turn.Response.position = Game.Position.{row = 1; column = 0}} in
+  let game, piece = query.game, query.you_play in
+  let response = {Rpcs.Take_turn.Response.piece = piece ; Rpcs.Take_turn.Response.position = (Exercises.minimax game ~me:piece)} in
   return response
 ;;
 
