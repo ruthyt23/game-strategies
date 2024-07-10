@@ -322,8 +322,10 @@ module Exercises = struct
       else if List.for_all row ~f:(fun pos -> Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.O)
         then o_score.contents <- (List.length row)
     ));
-    let mult_winning_moves = (List.length (winning_moves game ~me) - 1) * 50 in
-    let mult_losing_moves = (List.length (winning_moves game ~me:(Game.Piece.flip me)) - 1) * 250 in
+    let mult_winning_moves =
+      if (List.length (winning_moves game ~me) > 1) then List.length (winning_moves game ~me) * 50 else 0 in
+    let mult_losing_moves =
+      if (List.length (winning_moves game ~me:(Game.Piece.flip me)) > 1) then List.length (winning_moves game ~me:(Game.Piece.flip me)) * 250 else 0 in
     match me with
     | Game.Piece.X -> !x_score - (!o_score * 5) + mult_winning_moves - mult_losing_moves
     | Game.Piece.O -> !o_score - (!x_score * 5) + mult_winning_moves - mult_losing_moves
