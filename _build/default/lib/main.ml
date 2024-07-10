@@ -322,9 +322,10 @@ module Exercises = struct
       else if List.for_all row ~f:(fun pos -> Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.O)
         then o_score.contents <- (List.length row)
     ));
+    let mult_winning_moves = (List.length (winning_moves game ~me) - 1) * 100 in
     match me with
-    | Game.Piece.X -> !x_score - (!o_score * 5)
-    | Game.Piece.O -> !o_score - (!x_score * 5)
+    | Game.Piece.X -> !x_score - (!o_score * 5) + (mult_winning_moves * 10)
+    | Game.Piece.O -> !o_score - (!x_score * 5) + (mult_winning_moves * 10)
   ;;
 
   let rec minimax_alg (game : Game.t) ~(me : Game.Piece.t) ~(maximizingPlayer : bool) ~(depth : int) ?(max_val = Int.min_value) () = 
@@ -367,8 +368,8 @@ module Exercises = struct
       then (List.hd_exn win_moves)
     else if not (List.is_empty lose_moves) 
       then (List.hd_exn lose_moves)
-    (*else if (Map.is_empty game.board)
-      then (let n = Game.Game_kind.board_length game.game_kind / 2 in Game.Position.{row = n; column = n})*)
+    else if (Map.is_empty game.board)
+      then (let n = Game.Game_kind.board_length game.game_kind / 2 in Game.Position.{row = n; column = n})
     else (
       List.iter (available_moves game) ~f:(fun pos -> 
       let new_board = place_piece game ~piece:me ~position:pos in 
