@@ -97,6 +97,12 @@ module Exercises = struct
     |> place_piece ~piece:Piece.O ~position:{ Position.row = 4; column = 7 }
   ;;
 
+  let side_move_test =
+    let open Game in
+    empty_game
+    |> place_piece ~piece:Piece.X ~position:{ Position.row = 0; column = 0 }
+  ;;
+
   let position_game_array (game : Game.t) =
     let length = Game.Game_kind.board_length game.game_kind in
     List.init length ~f:(fun row ->
@@ -124,10 +130,20 @@ module Exercises = struct
 
   let print_game (game : Game.t) =
     let game_array = string_game_array game in
-    print_string
-      (String.concat
-         ~sep:"\n---------\n"
-         (List.map game_array ~f:(fun row -> String.concat ~sep:" | " row)))
+    (match game.game_kind with
+     | Game.Game_kind.Tic_tac_toe ->
+       Core.print_string
+         (String.concat
+            ~sep:"\n---------\n"
+            (List.map game_array ~f:(fun row -> String.concat ~sep:" | " row)))
+     | Game.Game_kind.Omok ->
+       Core.print_string
+         (String.concat
+            ~sep:
+              "\n--------------------------------------------------------\n"
+            (List.map game_array ~f:(fun row -> String.concat ~sep:" | " row))));
+    Core.print_endline "";
+    Core.print_endline ""
   ;;
 
   let%expect_test "print_win_for_x" =
@@ -190,31 +206,32 @@ module Exercises = struct
   ;;
 
   let close_available_moves (game : Game.t) =
-    let board_length = Game.Game_kind.board_length game.game_kind in
+    let win_length = Game.Game_kind.win_length game.game_kind in
+    let total_row, total_col =
+      List.fold
+        (Map.keys game.board)
+        ~init:(0, 0)
+        ~f:(fun (x, y) { row; column } -> x + row, y + column)
+    in
+    let avg_row, avg_col =
+      ( total_row / List.length (Map.keys game.board)
+      , total_col / List.length (Map.keys game.board) )
+    in
     all_available_moves game
     |> List.filter ~f:(fun { row; column } ->
-      [ row - 1, column - 1
-      ; row - 1, column
-      ; row - 1, column + 1
-      ; row, column - 1
-      ; row, column + 1
-      ; row + 1, column - 1
-      ; row + 1, column
-      ; row + 1, column + 1
-      ]
-      |> List.filter ~f:(fun (row, column) ->
-        exists game ~board_length ~row ~column)
-      |> List.exists ~f:(fun (row, column) ->
-        match Map.find game.board { Game.Position.row; column } with
-        | Some _ -> true
-        | None -> false))
+      row >= avg_row - win_length
+      && row <= avg_row + win_length
+      && column >= avg_col - win_length
+      && column <= avg_col + win_length)
   ;;
 
   let available_moves (game : Game.t) =
-    (* switch around? *)
-    if Map.length game.board < Game.Game_kind.win_length game.game_kind
-    then all_available_moves game
-    else close_available_moves game
+    match game.game_kind with
+    | Game.Game_kind.Tic_tac_toe -> all_available_moves game
+    | Game.Game_kind.Omok ->
+      if Map.length game.board < Game.Game_kind.board_length game.game_kind
+      then close_available_moves game
+      else all_available_moves game
   ;;
 
   let potential_win_paths (game : Game.t) ~row ~column
@@ -227,14 +244,14 @@ module Exercises = struct
         List.init n ~f:(fun index2 ->
           { Game.Position.row = row + index1 - index2; column })
         |> List.filter ~f:(fun { row; column } ->
-          exists game ~board_length:n ~row ~column))
+          exists game ~board_length ~row ~column))
     in
     let horizontal =
       List.init n ~f:(fun index1 ->
         List.init n ~f:(fun index2 ->
           { Game.Position.row; column = column + index1 - index2 })
         |> List.filter ~f:(fun { row; column } ->
-          exists game ~board_length:n ~row ~column))
+          exists game ~board_length ~row ~column))
     in
     let diagonal_left =
       List.init n ~f:(fun index1 ->
@@ -243,7 +260,7 @@ module Exercises = struct
           ; column = column + index1 - index2
           })
         |> List.filter ~f:(fun { row; column } ->
-          exists game ~board_length:n ~row ~column))
+          exists game ~board_length ~row ~column))
     in
     let diagonal_right =
       List.init n ~f:(fun index1 ->
@@ -375,25 +392,13 @@ module Exercises = struct
       |> List.iter ~f:(fun row ->
         if List.for_all row ~f:(fun pos ->
              Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.X)
-        then x_score := List.length row
+        then x_score := !x_score + List.length row
         else if List.for_all row ~f:(fun pos ->
                   Game.Piece.equal (Map.find_exn game.board pos) Game.Piece.O)
-        then o_score := List.length row));
-    let mult_winning_moves =
-      if List.length (winning_moves game ~me) > 1
-      then List.length (winning_moves game ~me) * 50
-      else 0
-    in
-    let mult_losing_moves =
-      if List.length (winning_moves game ~me:(Game.Piece.flip me)) > 1
-      then List.length (winning_moves game ~me:(Game.Piece.flip me)) * 250
-      else 0
-    in
+        then o_score := !o_score + List.length row));
     match me with
-    | Game.Piece.X ->
-      !x_score - (!o_score * 5) + mult_winning_moves - mult_losing_moves
-    | Game.Piece.O ->
-      !o_score - (!x_score * 5) + mult_winning_moves - mult_losing_moves
+    | Game.Piece.X -> !x_score - (!o_score * 5)
+    | Game.Piece.O -> !o_score - (!x_score * 5)
   ;;
 
   let rec minimax_alg
@@ -406,7 +411,7 @@ module Exercises = struct
     =
     match evaluate game with
     | Game.Evaluation.Game_over { winner = Some piece } ->
-      if Game.Piece.equal piece me then 100000 + depth else -100000 - depth
+      if Game.Piece.equal piece me then 10000 + depth else -10000 - depth
     | Game.Evaluation.Game_over { winner = None } -> 0
     | _ ->
       if depth = 0
@@ -418,7 +423,9 @@ module Exercises = struct
         else if maximizingPlayer
         then (
           List.iter (available_moves game) ~f:(fun pos ->
-            let new_board = place_piece game ~piece:me ~position:pos in
+            let new_board =
+              place_piece game ~piece:(Game.Piece.flip me) ~position:pos
+            in
             value
             := max
                  !value
@@ -456,6 +463,13 @@ module Exercises = struct
     | [], lose_head :: _ -> lose_head
     | [], [] ->
       if Map.is_empty game.board
+         || (Map.length game.board = 1
+             &&
+             match
+               Map.find game.board { Game.Position.row = 0; column = 0 }
+             with
+             | Some _ -> true
+             | _ -> false)
       then (
         let n = Game.Game_kind.board_length game.game_kind / 2 in
         Game.Position.{ row = n; column = n })
@@ -469,11 +483,11 @@ module Exercises = struct
                 new_board
                 ~me
                 ~maximizingPlayer:true
-                ~depth:2
+                ~depth:1
                 ~max_val:!max_val
                 ()
             | Game.Game_kind.Tic_tac_toe ->
-              minimax_alg new_board ~me ~maximizingPlayer:true ~depth:5 ()
+              minimax_alg new_board ~me ~maximizingPlayer:true ~depth:9 ()
           in
           if value > !max_val
           then (
@@ -587,11 +601,79 @@ module Exercises = struct
       (let%map_open.Command () = return () in
        fun () ->
          let start = Time_ns_unix.now () in
+         print_game serious_omok_test;
          let omok_test = minimax serious_omok_test ~me:Game.Piece.X in
          print_s [%sexp (omok_test : Game.Position.t)];
          let stop = Time_ns_unix.now () in
          let time_elapsed = Time_ns_unix.diff stop start in
          Core.printf !"Finished in %{Time_ns_unix.Span}\n%!" time_elapsed;
+         return ())
+  ;;
+
+  let side_move_test =
+    Command.async
+      ~summary:"Side Move Test"
+      (let%map_open.Command () = return () in
+       fun () ->
+         print_game side_move_test;
+         let new_move = minimax side_move_test ~me:Game.Piece.O in
+         print_s [%sexp (new_move : Game.Position.t)];
+         return ())
+  ;;
+
+  let self_ttt_test =
+    Command.async
+      ~summary:"Tic Tac Toe Against Self"
+      (let%map_open.Command () = return () in
+       fun () ->
+         let iterator = List.init 9 ~f:(fun x -> x) in
+         let _ =
+           List.fold iterator ~init:empty_game ~f:(fun game num ->
+             print_game game;
+             let piece =
+               match num % 2 with 0 -> Game.Piece.X | _ -> Game.Piece.O
+             in
+             let new_board =
+               place_piece game ~piece ~position:(minimax game ~me:piece)
+             in
+             match evaluate new_board with
+             | Game.Evaluation.Game_continues -> new_board
+             | Game.Evaluation.Game_over { winner = piece } ->
+               Core.print_s [%sexp (piece : Game.Piece.t option)];
+               let _ = failwith "game over" in
+               new_board
+             | Game.Evaluation.Illegal_move ->
+               let _ = failwith "game over" in
+               new_board)
+         in
+         return ())
+  ;;
+
+  let self_omok_test =
+    Command.async
+      ~summary:"Omok Against Self"
+      (let%map_open.Command () = return () in
+       fun () ->
+         let iterator = List.init 225 ~f:(fun x -> x) in
+         let _ =
+           List.fold iterator ~init:empty_omok ~f:(fun game num ->
+             print_game game;
+             let piece =
+               match num % 2 with 0 -> Game.Piece.X | _ -> Game.Piece.O
+             in
+             let new_board =
+               place_piece game ~piece ~position:(minimax game ~me:piece)
+             in
+             match evaluate new_board with
+             | Game.Evaluation.Game_continues -> new_board
+             | Game.Evaluation.Game_over { winner = piece } ->
+               Core.print_s [%sexp (piece : Game.Piece.t option)];
+               let _ = failwith "game over" in
+               new_board
+             | Game.Evaluation.Illegal_move ->
+               let _ = failwith "game over" in
+               new_board)
+         in
          return ())
   ;;
 
@@ -606,6 +688,9 @@ module Exercises = struct
       ; "six", exercise_six
       ; "diag-debug", diagonal_debug
       ; "omok-test", omok_test
+      ; "side-move-test", side_move_test
+      ; "self-omok-test", self_omok_test
+      ; "self-ttt-test", self_ttt_test
       ]
   ;;
 end
@@ -652,4 +737,4 @@ let command =
     [ "play", command_play; "exercises", Exercises.command ]
 ;;
 
-(* review available moves, increase omok speed, modify score values *)
+(* increase omok speed *)
