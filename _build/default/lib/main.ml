@@ -205,8 +205,7 @@ module Exercises = struct
     return ()
   ;;
 
-  let close_available_moves (game : Game.t) =
-    let win_length = Game.Game_kind.win_length game.game_kind in
+  let close_available_moves (game : Game.t) (threshold : int) =
     let total_row, total_col =
       List.fold
         (Map.keys game.board)
@@ -219,19 +218,34 @@ module Exercises = struct
     in
     all_available_moves game
     |> List.filter ~f:(fun { row; column } ->
-      row >= avg_row - win_length
-      && row <= avg_row + win_length
-      && column >= avg_col - win_length
-      && column <= avg_col + win_length)
+      row >= avg_row - threshold
+      && row <= avg_row + threshold
+      && column >= avg_col - threshold
+      && column <= avg_col + threshold)
   ;;
 
   let available_moves (game : Game.t) =
     match game.game_kind with
     | Game.Game_kind.Tic_tac_toe -> all_available_moves game
     | Game.Game_kind.Omok ->
-      if Map.length game.board < Game.Game_kind.board_length game.game_kind
-      then close_available_moves game
-      else all_available_moves game
+      if Map.length game.board < 5
+      then close_available_moves game 2
+      else if Map.length game.board < 50
+      then close_available_moves game 4
+      else (
+        let five_close_moves = close_available_moves game 5 in
+        let seven_close_moves = close_available_moves game 7 in
+        if not (List.is_empty five_close_moves)
+        then five_close_moves
+        else if not (List.is_empty seven_close_moves)
+        then seven_close_moves
+        else all_available_moves game)
+  ;;
+
+  let _nono_available_moves (game : Game.t) =
+    if Map.length game.board < 5
+    then close_available_moves game 2
+    else all_available_moves game
   ;;
 
   let potential_win_paths (game : Game.t) ~row ~column
@@ -302,7 +316,7 @@ module Exercises = struct
       match win_check game with
       | Some piece -> Game.Evaluation.Game_over { winner = Some piece }
       | None ->
-        if List.is_empty (available_moves game)
+        if List.is_empty (all_available_moves game)
         then Game.Evaluation.Game_over { winner = None }
         else Game.Evaluation.Game_continues)
   ;;
@@ -483,7 +497,7 @@ module Exercises = struct
                 new_board
                 ~me
                 ~maximizingPlayer:true
-                ~depth:1
+                ~depth:2
                 ~max_val:!max_val
                 ()
             | Game.Game_kind.Tic_tac_toe ->
@@ -658,6 +672,7 @@ module Exercises = struct
          let _ =
            List.fold iterator ~init:empty_omok ~f:(fun game num ->
              print_game game;
+             let start = Time_ns_unix.now () in
              let piece =
                match num % 2 with 0 -> Game.Piece.X | _ -> Game.Piece.O
              in
@@ -665,7 +680,13 @@ module Exercises = struct
                place_piece game ~piece ~position:(minimax game ~me:piece)
              in
              match evaluate new_board with
-             | Game.Evaluation.Game_continues -> new_board
+             | Game.Evaluation.Game_continues ->
+               let stop = Time_ns_unix.now () in
+               let time_elapsed = Time_ns_unix.diff stop start in
+               Core.printf
+                 !"Finished in %{Time_ns_unix.Span}\n%!"
+                 time_elapsed;
+               new_board
              | Game.Evaluation.Game_over { winner = piece } ->
                Core.print_s [%sexp (piece : Game.Piece.t option)];
                let _ = failwith "game over" in
